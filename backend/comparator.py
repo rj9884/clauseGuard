@@ -1,7 +1,6 @@
 from sentence_transformers import SentenceTransformer
 from typing import List, Dict
 
-# Loading a small sentence-transformers model
 try:
     model = SentenceTransformer('all-MiniLM-L6-v2')
 except Exception as e:
@@ -19,9 +18,6 @@ def compare_clauses(old_clauses: List[str], new_clauses: List[str]) -> Dict[str,
         
     old_embeddings = model.encode(old_clauses)
     new_embeddings = model.encode(new_clauses)
-    
-    # Very basic similarity check. In a real scenario, use cosine similarity.
-    # For now, just return a mock response for the demo.
     
     return {
         "status": "success",

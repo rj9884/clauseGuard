@@ -1,14 +1,12 @@
-import fitz  # PyMuPDF
+import fitz
 from docx import Document
 import spacy
 import re
 import os
 
-# Load the spaCy model for sentence boundary detection
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    # Fallback to download the model if not present
     from spacy.cli import download
     download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
@@ -26,13 +24,11 @@ def extract_text_from_docx(file_path: str) -> str:
     return "\n".join(text)
 
 def clean_text(text: str) -> str:
-    # Remove excessive newlines and spaces
     text = re.sub(r'\n+', ' ', text)
     text = re.sub(r'\s{2,}', ' ', text)
     return text.strip()
 
 def segment_into_clauses(text: str) -> list[str]:
-    # Use spaCy for sentence boundary detection to segment the text
     doc = nlp(text)
     clauses = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 30]
     return clauses

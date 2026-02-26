@@ -1,7 +1,5 @@
 from transformers import pipeline
 
-# We use a lightweight zero-shot classifier model for hackathon speed
-# Fallback is manual keyword matching if model takes too long to load
 classifier = None
 try:
     classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
@@ -21,7 +19,6 @@ CONTRACT_CANDIDATE_LABELS = [
 ]
 
 def detect_contract_type_fallback(text: str) -> tuple[str, float]:
-    # Regex/keyword fallback if pipeline fails
     text_lower = text[:1500].lower()
     if "non-disclosure" in text_lower or "confidentiality" in text_lower:
         return "Non-Disclosure Agreement (NDA)", 0.85
@@ -41,12 +38,10 @@ def detect_contract_type(text: str) -> tuple[str, float]:
         return detect_contract_type_fallback(snippet)
         
     try:
-        # Zero-shot classification
         result = classifier(snippet, CONTRACT_CANDIDATE_LABELS)
         best_label = result['labels'][0]
         best_score = result['scores'][0]
         
-        # If confidence is too low, we fallback
         if best_score < 0.4:
             return "General Commercial Contract", best_score
             
