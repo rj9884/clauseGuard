@@ -20,6 +20,9 @@
 
 ClauseGuard is a full-stack AI application that analyzes legal contracts for non-lawyers. Upload a PDF or DOCX, and the system segments it into clauses, classifies the contract type, scores each clause for risk across 5 dimensions, generates safe rewrites, and produces a negotiation action plan.
 
+> 🎬 A demo video of the app can be found at `https://github.com/rj9884/clauseGuard/blob/main/frontend/public/demo-video/ClauseGaurd(1).mp4`.
+
+
 ---
 
 ## Pipeline & Data Flow
