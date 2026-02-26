@@ -6,7 +6,7 @@ from pydantic import BaseModel
 import uuid
 import shutil
 
-# Import modules once we create them
+
 from parser import process_document
 from classifier import detect_contract_type
 from analyzer import analyze_clauses
@@ -14,7 +14,7 @@ from comparator import compare_clauses
 
 app = FastAPI(title="ClauseGuard API")
 
-# Setup CORS
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,17 +57,17 @@ async def upload_contract(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 1. Parse Document
+
         clauses = process_document(file_path)
         if not clauses:
             raise HTTPException(status_code=400, detail="Could not extract text or clauses from the document.")
             
         full_text = " ".join(clauses)
         
-        # 2. Add short timeout or parallel tasks for demo speed
+
         contract_type, confidence = detect_contract_type(full_text)
         
-        # 3. Analyze Clauses and generate summary/brief
+
         result = await analyze_clauses(clauses, contract_type, full_text)
         
         return {
@@ -85,7 +85,7 @@ async def upload_contract(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        pass # Optional: cleanup file
+        pass
 
 @app.post("/compare")
 async def compare_contracts(file1: UploadFile = File(...), file2: UploadFile = File(...)):

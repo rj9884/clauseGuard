@@ -5,7 +5,7 @@ from google import genai
 from google.genai import types
 from typing import List, Dict, Any
 
-# Configure Gemini with the API Key
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not set. API calls will fail.")
@@ -105,8 +105,7 @@ def derive_negotiation_brief_and_flags(clauses: List[dict]) -> tuple[List[dict],
     return briefs, flags
 
 async def analyze_clauses(clauses: List[str], contract_type: str, full_text: str) -> Dict[str, Any]:
-    # Process clauses in small batches with delays to avoid 429 rate limit errors
-    # Free tier: ~5 requests/minute for gemini-2.5-flash
+
     analyzed_clauses = []
     batch_size = 4
     delay_between_batches = 15  # seconds
@@ -120,20 +119,20 @@ async def analyze_clauses(clauses: List[str], contract_type: str, full_text: str
         if i + batch_size < len(limited_clauses):
             await asyncio.sleep(delay_between_batches)
     
-    # Calculate overall score
+
     if not analyzed_clauses:
          overall_score = 0
     else:
          total_score = sum(c.get("risk_score", 0) for c in analyzed_clauses)
          overall_score = int(total_score / len(analyzed_clauses))
          
-    # Sort clauses by risk score descending
+
     analyzed_clauses.sort(key=lambda x: x.get("risk_score", 0), reverse=True)
     
-    # Get summary
+
     summary = await generate_summary(full_text, contract_type)
     
-    # Derive negotiation brief and red flags from the High/Critical clauses
+
     negotiation_brief, compliance_flags = derive_negotiation_brief_and_flags(analyzed_clauses)
     
     return {
