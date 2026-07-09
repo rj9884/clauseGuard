@@ -61,7 +61,7 @@ async def upload_contract(file: UploadFile = File(...)):
             
         full_text = " ".join(clauses)
         
-        contract_type, confidence = detect_contract_type(full_text)
+        contract_type, confidence = await detect_contract_type(full_text)
         
         result = await analyze_clauses(clauses, contract_type, full_text)
         
@@ -100,7 +100,7 @@ async def compare_contracts(file1: UploadFile = File(...), file2: UploadFile = F
         if not c1 or not c2:
             raise HTTPException(status_code=400, detail="Could not extract text from one or both documents.")
             
-        result = compare_clauses(c1, c2)
+        result = await compare_clauses(c1, c2)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

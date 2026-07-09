@@ -1,236 +1,129 @@
-# 🛡️ ClauseGuard — AI-Powered Contract Risk Analyzer
+# ClauseGuard - AI-Powered Contract Risk Analyzer
 
-> Upload any contract. Get instant risk scores, red flags, safer alternatives, and a negotiation brief — powered by Gemini AI.
+ClauseGuard is a hybrid AI-powered system designed to analyze, classify, and compare legal contracts. By leveraging a local sentence embedding model for semantic diffing and the Gemini API for natural language risk assessment, the application helps identify compliance flags, calculate clause-level risk scores, and generate negotiation talking points.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Pipeline & Data Flow](#pipeline--data-flow)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
+- [System Architecture and Data Flow](#system-architecture-and-data-flow)
+- [Core Components](#core-components)
+- [Technical Stack](#technical-stack)
 - [API Reference](#api-reference)
 - [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
+- [Deployment and Setup](#deployment-and-setup)
 
 ---
 
 ## Overview
 
-ClauseGuard is a full-stack AI application that analyzes legal contracts for non-lawyers. Upload a PDF or DOCX, and the system segments it into clauses, classifies the contract type, scores each clause for risk across 5 dimensions, generates safe rewrites, and produces a negotiation action plan.
-
-> 🎬 A demo video of the app can be found at `https://github.com/rj9884/clauseGuard/blob/main/frontend/public/demo-video/ClauseGaurd(1).mp4`.
-
+ClauseGuard segments legal agreements (PDF and DOCX) into distinct clauses, detects the contract type, scores each clause based on risk categories (Financial, Legal, Compliance, Enforceability, and Termination), suggests mitigation alternatives, and highlights negotiation talking points. It also offers semantic document comparison to align and analyze risk changes between original and revised contracts.
 
 ---
 
-## Pipeline & Data Flow
+## System Architecture and Data Flow
 
 ```
-Upload (PDF / DOCX)
+Upload (PDF or DOCX)
         │
         ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  parser.py                                                           │
-│  PyMuPDF / python-docx → clean text → spaCy sentence segmentation   │
-│  Output: List of clause strings (max 20)                             │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ parser.py                                              │
+│ PyMuPDF or python-docx -> Text Cleaning                │
+│ Regex Sentence Segmentation                            │
+│ Output: List of parsed clauses                         │
+└────────────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  classifier.py                                                       │
-│  facebook/bart-large-mnli (zero-shot) on first 1,500 chars          │
-│  Output: (contract_type, confidence)                                 │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ classifier.py                                          │
+│ Gemini 2.0 Flash (Category Detection on snippet)       │
+│ Output: Contract Type and Confidence Score             │
+└────────────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  analyzer.py                                                         │
-│  gemini-2.0-flash — batches of 4 clauses, 15s inter-batch delay     │
-│  Per clause → risk_score, risk_level, risk_category,                │
-│               explanation, safer_alternative, negotiation_point      │
-│  Also → 5-point plain-English summary (separate Gemini call)        │
-│  Post-processing → negotiation_brief[], compliance_flags[]           │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ analyzer.py                                            │
+│ Gemini 2.0 Flash (Batch Processing, size = 4)          │
+│ Outputs: risk_score, risk_level, risk_category,        │
+│          safer_alternative, negotiation_point          │
+└────────────────────────────────────────────────────────┘
         │
         ▼
-  JSON Response → React Frontend (tabbed dashboard)
+┌────────────────────────────────────────────────────────┐
+│ comparator.py (For Contract Comparison)                │
+│ Local Model: sentence-transformers/all-MiniLM-L6-v2    │
+│ Cosine Similarity Mapping + Gemini Risk Explanations   │
+│ Outputs: delta_score, matched change sets              │
+└────────────────────────────────────────────────────────┘
         │
-        └── jsPDF export (client-side, no server round-trip)
+        ▼
+JSON Response -> React Frontend Client
 ```
 
-For contract comparison, both files go through the same parse pipeline and embeddings are computed via `sentence-transformers/all-MiniLM-L6-v2`.
+---
+
+## Core Components
+
+### 1. Document Parsing and Segmentation
+* **Extraction:** The backend handles PDF text extraction using PyMuPDF and DOCX extraction using python-docx.
+* **Cleaning:** A preprocessing pass collapses redundant white spaces and normalizes newlines.
+* **Segmentation:** Clauses are extracted using a rule-based regex tokenizer designed for contract clause boundaries. Abbreviations (such as Co., Ltd., Corp., Inc., e.g., and i.e.) are filtered to prevent false splits. Only segments exceeding 30 characters are processed.
+* **Batch Capping:** Analysis is capped at the top 20 clauses to optimize rate-limiting thresholds.
+
+### 2. Contract Type Classification
+* **Model:** The classification engine queries Gemini 2.0 Flash with a structured schema returning the classified category and confidence score.
+* **Candidate Labels:** NDA, Employment Agreement, SaaS / Software License, Vendor Agreement, Partnership Agreement, Commercial Lease, Consulting Agreement, Share Purchase Agreement, and General Commercial Contract.
+* **Fallback Mode:** In case of API limits or connectivity issues, a regex-based keyword matching algorithm acts as a local fallback.
+
+### 3. Risk Analysis Engine
+* **Concurrent Execution:** Clauses are processed in parallel batches of 4 using asyncio.
+* **Analysis Metadata:** Each clause is graded on a risk score (0-100), risk level (Low, Medium, High, Critical), risk category, explanation, safer alternative rewrite, and counterparty negotiation point.
+* **Summarization:** A separate API call summarizes the contract into exactly five plain-English bullet points.
+
+### 4. Hybrid Semantic Comparison
+* **Local Embedding Matching:** The comparison engine generates embeddings for the original and revised clause lists using a local `all-MiniLM-L6-v2` transformer model. It calculates a pairwise cosine similarity matrix.
+* **Clause Diffing:** Match pairs are grouped by similarity:
+  * **Unchanged:** Similarity >= 0.98
+  * **Modified:** 0.55 <= Similarity < 0.98
+  * **Added:** New clauses with similarity < 0.55
+  * **Deleted:** Old clauses with similarity < 0.55
+* **LLM Explanation:** For modified clauses, Gemini 2.0 Flash is invoked asynchronously to describe the exact business risk impact of the change.
 
 ---
 
-## Features
-
-### Upload & Parsing
-
-![Home — Upload & History](frontend/public/images/home.png)
-
-| Step | Detail |
-|------|--------|
-| File types | PDF (PyMuPDF page-by-page) and DOCX (python-docx paragraphs) |
-| Text cleaning | Regex collapses newlines and whitespace |
-| Segmentation | spaCy `en_core_web_sm` sentence boundary detection; clauses < 30 chars discarded |
-| Cap | Top 20 clauses sent to AI to stay within free-tier rate limits |
-
----
-
-### Contract Classification
-
-| Aspect | Detail |
-|--------|--------|
-| Model | `facebook/bart-large-mnli` (HuggingFace zero-shot pipeline) |
-| Input | First 1,500 characters of document |
-| Candidate labels | NDA, Employment, SaaS/Software License, Vendor, Partnership, Commercial Lease, Consulting, Share Purchase, General Commercial |
-| Confidence threshold | < 0.4 → falls back to `"General Commercial Contract"` |
-| Hard fallback | Keyword regex scan if model fails to load |
-| UI | Displayed as `"Consulting Agreement (90% Match)"` badge |
-
----
-
-### AI Risk Analysis
-
-![Analysis Overview — Score & Radar](frontend/public/images/overview.png)
-
-**Per-clause fields returned by Gemini:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `risk_score` | int 0–100 | Numeric severity |
-| `risk_level` | enum | `Low` / `Medium` / `High` / `Critical` |
-| `risk_category` | enum | `Financial` / `Legal` / `Compliance` / `Enforceability` / `Termination` |
-| `explanation` | string | 2-sentence plain-English reason |
-| `safer_alternative` | string | Full rewritten clause |
-| `negotiation_point` | string | Specific ask for the counterparty |
-
-**Scoring:** `overall_score` = arithmetic mean of all clause scores. Clauses returned sorted descending by score.
-
-**Rate limiting:** Batches of 4 clauses processed concurrently via `asyncio.gather()`, with a 15-second pause between batches for Gemini free-tier compliance.
-
----
-
-### Clause Browser
-
-![Clause List — Risk-sorted with Filters](frontend/public/images/clauses.png)
-
-| Feature | Implementation |
-|---------|----------------|
-| Color-coded cards | 2px left border — red (Critical), orange (High), yellow (Medium), green (Low) |
-| Default sort | Descending by `risk_score` (inherits backend sort) |
-| Search | `String.includes()` on `original_text`; matches highlighted via regex + `<mark>` tag |
-| Filter | `useMemo` hook on risk level — no re-fetch |
-| Expand | Click to reveal full text, explanation, and safe rewrite diff |
-
----
-
-### Safe Rewrite & Diff View
-
-| Aspect | Detail |
-|--------|--------|
-| Availability | All `High` and `Critical` clauses |
-| Display | Two-column panel: original (red-tinted) vs. suggested (green-tinted) |
-| Copy | `navigator.clipboard.writeText()` hover button |
-| Generation | Produced in the same Gemini call as the risk score — no extra latency |
-
----
-
-### Negotiation Action Plan
-
-![Negotiation — Quoted Talking Points](frontend/public/images/negotiation.png)
-
-| Aspect | Detail |
-|--------|--------|
-| Source | Pure Python post-processing of analyzed clauses — no additional AI call |
-| Trigger | Any clause with `risk_level` in `["High", "Critical"]` |
-| Output | Quoted talking points with severity badge and clause reference |
-
----
-
-### Red Flags Panel
-
-![Red Flags — Critical Issues](frontend/public/images/red-flags.png)
-
-| Aspect | Detail |
-|--------|--------|
-| Sources | Clauses with `risk_score ≥ 80` + `compliance_flags[]` from backend |
-| Tab badge | Shows total count of High + Critical clauses |
-| Display | Danger-bordered cards (critical) and warning-bordered cards (compliance) |
-
----
-
-### Contract Comparison
-
-![Compare — Upload Two Versions](frontend/public/images/compare.png)
-
-| Step | Detail |
-|------|--------|
-| Input | Two files (`file1` = original, `file2` = negotiated) via `multipart/form-data` |
-| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` encodes both clause lists |
-| Output | `delta_score`, human-readable message, and `changes[]` array per modified clause |
-| Display | Side-by-side diff cards color-coded by change type (Risk Decreased / Increased / Neutral) |
-
----
-
-### Other Features
-
-| Feature | Detail |
-|---------|--------|
-| **PDF Export** | Client-side only via **jsPDF** — no server round-trip; includes score, summary, and filename |
-| **Local History** | Analyses serialized to `localStorage` under `analysis_<id>`; last 5 shown on homepage with color-coded scores |
-| **Demo Mode** | `?demo=true` query param loads a hardcoded mock payload — works with no backend or API key |
-
----
-
-## Tech Stack
+## Technical Stack
 
 ### Backend
-
-| Library | Purpose |
-|---------|---------|
-| FastAPI + uvicorn | Async REST API |
-| PyMuPDF (`fitz`) | PDF text extraction |
-| python-docx | DOCX extraction |
-| spaCy `en_core_web_sm` | Clause segmentation |
-| `facebook/bart-large-mnli` | Zero-shot contract classification |
-| `gemini-2.0-flash` (Google GenAI) | Per-clause risk analysis & summary |
-| `all-MiniLM-L6-v2` | Semantic embeddings for contract comparison |
+* **FastAPI and Uvicorn:** High-performance asynchronous routing and server execution.
+* **PyMuPDF (fitz):** PDF document parsing.
+* **python-docx:** DOCX document parsing.
+* **google-genai:** Asynchronous interactions with Gemini 2.0 Flash.
+* **sentence-transformers:** Local embeddings and similarity calculations.
+* **Pydantic v2:** Input and output schema validation.
 
 ### Frontend
-
-| Library | Purpose |
-|---------|---------|
-| React 18 + TypeScript | Component UI |
-| Vite | Build tool & dev server |
-| Tailwind CSS | Styling |
-| Recharts | RadarChart for risk visualization |
-| jsPDF | Client-side PDF export |
-| react-router-dom v6 | Client-side routing |
+* **React and TypeScript:** Single-page application UI development.
+* **Vite:** Asset compilation and hot-reloading dev server.
+* **Tailwind CSS:** Utility-first interface styling.
+* **Recharts:** Data visualization for risk analytics.
+* **jsPDF:** Client-side document generation.
 
 ---
 
 ## API Reference
 
 ### `POST /upload`
-
-| | |
-|--|--|
-| Body | `multipart/form-data` — field `file` (PDF or DOCX, ≤ 10 MB) |
-| Response | Full analysis JSON: `id`, `filename`, `contract_type`, `type_confidence`, `overall_score`, `summary[]`, `clauses[]`, `negotiation_brief[]`, `compliance_flags[]` |
+* **Request:** `multipart/form-data` containing the file parameter (PDF or DOCX).
+* **Response:** Returns JSON object containing the document metadata, contract classification details, overall risk scores, five-bullet summary, and the list of analyzed clauses.
 
 ### `POST /compare`
-
-| | |
-|--|--|
-| Body | `multipart/form-data` — fields `file1` (v1), `file2` (v2) |
-| Response | `delta_score`, `message`, `changes[]` (each with `type`, `old_text`, `new_text`, `explanation`) |
+* **Request:** `multipart/form-data` containing file1 (original version) and file2 (negotiated version).
+* **Response:** Returns JSON object containing the overall risk delta score, a change summary message, and the list of categorized semantic modifications.
 
 ### `GET /health`
-
-Returns `{"status": "healthy"}` — used by Docker health checks.
+* **Response:** `{"status": "healthy"}`
 
 ---
 
@@ -239,18 +132,17 @@ Returns `{"status": "healthy"}` — used by Docker health checks.
 ```
 clauseGuard/
 ├── backend/
-│   ├── main.py           # FastAPI routes + CORS
-│   ├── parser.py         # Text extraction + spaCy segmentation
-│   ├── classifier.py     # Zero-shot contract type detection
-│   ├── analyzer.py       # Gemini AI analysis, summary, briefs, flags
-│   ├── comparator.py     # Semantic diff via sentence-transformers
+│   ├── main.py           # FastAPI server interface and CORS configuration
+│   ├── parser.py         # Text cleaning and regex clause segmentation
+│   ├── classifier.py     # Gemini-based contract category classifier
+│   ├── analyzer.py       # Gemini-based risk scoring and summarizing
+│   ├── comparator.py     # Local SentenceTransformer embedding match + Gemini explanations
+│   ├── .dockerignore
 │   └── Dockerfile
 ├── frontend/
-│   ├── public/images/    # Screenshots
-│   └── src/
-│       ├── pages/        # HomePage, AnalysisPage, ComparePage
-│       └── components/   # UploadZone, RiskDashboard, ClauseList,
-│                         # DiffView, NegoBrief, RedFlagPanel, ReportExport
+│   ├── src/              # React TSX pages and components
+│   ├── .dockerignore
+│   └── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
 └── SETUP.md
@@ -258,33 +150,23 @@ clauseGuard/
 
 ---
 
-## Getting Started
+## Deployment and Setup
 
-### Docker (Recommended)
+### Prerequisites
+* Docker and Docker Compose
+* Google Gemini API Key
 
-```bash
-git clone https://github.com/rj9884/clauseGuard.git && cd clauseGuard
-cp .env.example .env        # Add GEMINI_API_KEY
-docker compose up --build -d
-```
-
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API docs | http://localhost:8000/docs |
-
-> **First-run note:** Backend downloads `facebook/bart-large-mnli` (~1.6 GB) and `all-MiniLM-L6-v2` (~90 MB). Monitor with `docker compose logs backend -f`.
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GEMINI_API_KEY` | ✅ | Google Gemini API key ([get one free](https://aistudio.google.com/apikey)) |
-
-For manual setup without Docker, see [SETUP.md](SETUP.md).
+### Deploy with Docker
+1. Clone the repository and navigate to the project root.
+2. Copy `.env.example` to `.env` and fill in your `GEMINI_API_KEY`.
+3. Build and launch the containers:
+   ```bash
+   docker compose up --build -d
+   ```
+4. Access the web client at `http://localhost:5173` and the API documentation at `http://localhost:8000/docs`.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License. See LICENSE for details.

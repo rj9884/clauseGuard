@@ -1,15 +1,7 @@
 import fitz
 from docx import Document
-import spacy
 import re
 import os
-
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    from spacy.cli import download
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
 
 def extract_text_from_pdf(file_path: str) -> str:
     text = []
@@ -29,8 +21,38 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def segment_into_clauses(text: str) -> list[str]:
-    doc = nlp(text)
-    clauses = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 30]
+    """
+    Splits document text into clauses (sentences) using a lightweight regex-based tokenizer.
+    Avoids using spaCy to prevent dependency bloat and heavy memory footprint.
+    """
+    # Simple regex for sentence boundary detection:
+    # Look for a period, exclamation, or question mark, followed by a space,
+    # ensuring it's not preceded by common abbreviations.
+    sentence_end = re.compile(
+        r'(?<!\b(?:Inc|Co|Corp|Ltd|e\.g|i\.e|vs|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|No|Sec|Art|para))\.'
+        r'(?=\s+[A-Z0-9]|\s*$)'
+    )
+    
+    # Split paragraphs first, then segment sentences within paragraphs
+    paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+    
+    clauses = []
+    for paragraph in paragraphs:
+        # Rebuild sentences by splitting on the regex
+        matches = list(sentence_end.finditer(paragraph))
+        start = 0
+        current_sentences = []
+        for match in matches:
+            end = match.end()
+            current_sentences.append(paragraph[start:end].strip())
+            start = end
+        if start < len(paragraph):
+            current_sentences.append(paragraph[start:].strip())
+            
+        for sent in current_sentences:
+            if len(sent) > 30:
+                clauses.append(sent)
+                
     return clauses
 
 def process_document(file_path: str) -> list[str]:

@@ -1,10 +1,10 @@
-from transformers import pipeline
+import os
+import json
+from google import genai
+from google.genai import types
 
-classifier = None
-try:
-    classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
-except Exception as e:
-    print(f"Warning: Could not load HuggingFace zero-shot pipeline: {e}")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 CONTRACT_CANDIDATE_LABELS = [
     "Non-Disclosure Agreement (NDA)",
@@ -28,24 +28,39 @@ def detect_contract_type_fallback(text: str) -> tuple[str, float]:
         return "SaaS / Software License", 0.75
     return "General Commercial Contract", 0.50
 
-def detect_contract_type(text: str) -> tuple[str, float]:
+async def detect_contract_type(text: str) -> tuple[str, float]:
     """
-    Detect the contract type using the first 1500 characters of the document.
+    Detect the contract type using Gemini API (or fallback if API key is missing).
+    Uses the first 3000 characters for more accurate classification.
     """
-    snippet = text[:1500]
+    snippet = text[:3000]
     
-    if classifier is None:
+    if not client:
         return detect_contract_type_fallback(snippet)
         
+    prompt = f"""
+    You are a contract classifier. Classify the following contract snippet into exactly one of these categories:
+    {", ".join(CONTRACT_CANDIDATE_LABELS)}
+    
+    Return ONLY a valid JSON object with the fields "category" (string) and "confidence" (float between 0.0 and 1.0).
+    Contract Snippet:
+    {snippet}
+    """
     try:
-        result = classifier(snippet, CONTRACT_CANDIDATE_LABELS)
-        best_label = result['labels'][0]
-        best_score = result['scores'][0]
-        
-        if best_score < 0.4:
-            return "General Commercial Contract", best_score
-            
-        return best_label, best_score
+        response = await client.aio.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1,
+            ),
+        )
+        data = json.loads(response.text)
+        category = data.get("category")
+        confidence = data.get("confidence", 0.9)
+        if category in CONTRACT_CANDIDATE_LABELS:
+            return category, confidence
+        return "General Commercial Contract", 0.5
     except Exception as e:
-        print(f"Fallback due to classifier error: {e}")
+        print(f"Gemini classifier failed, using fallback: {e}")
         return detect_contract_type_fallback(snippet)
