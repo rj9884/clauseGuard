@@ -23,10 +23,13 @@ Before launching the application, you must define your environment variables.
    ```bash
    cp .env.example .env
    ```
-2. Open the `.env` file and set your Gemini API key:
+2. Open the `.env` file and configure your API keys:
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
+   OPENROUTER_API_KEY=your_openrouter_key_here
+   OPENROUTER_MODEL=openrouter/free
    ```
+
 
 ---
 

@@ -103,12 +103,71 @@ def derive_negotiation_brief_and_flags(clauses: List[dict]) -> tuple[List[dict],
             })
     return briefs, flags
 
+def score_clause_relevance(clause: str) -> float:
+    """Computes a heuristic risk relevance score for a clause to prioritize LLM budget."""
+    text = clause.lower()
+    score = 0.0
+    
+    # 1. Limitation of Liability / Cap on Liability
+    if any(k in text for k in ["liability", "liable", " cap ", "limit", "damage", "remedy"]):
+        score += 3.0
+        if "limitation of liability" in text or "cap on liability" in text or "limit of liability" in text:
+            score += 5.0
+            
+    # 2. Termination
+    if any(k in text for k in ["terminate", "termination", "expire", "expiration", "convenience"]):
+        score += 3.0
+        if "termination for convenience" in text:
+            score += 5.0
+            
+    # 3. IP Ownership / Assignment
+    if any(k in text for k in ["intellectual", " ip ", "patent", "copyright", "trademark", "proprietary", "invention", "work product"]):
+        score += 3.0
+        if "intellectual property" in text or "work product" in text or "ipr" in text:
+            score += 5.0
+            
+    # 4. Non-Compete / Non-Solicitation
+    if any(k in text for k in ["compete", "solicit", "covenant", "restrictive"]):
+        score += 3.0
+        if "non-compete" in text or "noncompete" in text or "non-solicit" in text or "nonsolicit" in text:
+            score += 5.0
+
+    # 5. Indemnification / Warranties (Other commercial risks evaluated by ClauseGuard in production)
+    if any(k in text for k in ["indemnify", "indemnification", "indemnity", "hold harmless"]):
+        score += 2.0
+    if any(k in text for k in ["warranty", "warranties", "disclaim", "disclaimer"]):
+        score += 1.0
+        
+    return score
+
+def select_top_clauses(clauses: List[str], max_clauses: int = 20) -> List[str]:
+    """Selects the top N clauses based on relevance score, preserving their original document order."""
+    if len(clauses) <= max_clauses:
+        return clauses
+        
+    scored_clauses = []
+    for idx, clause in enumerate(clauses):
+        score = score_clause_relevance(clause)
+        scored_clauses.append((score, idx, clause))
+        
+    # Sort by score descending, then by original index ascending (stable sort)
+    scored_clauses.sort(key=lambda x: (-x[0], x[1]))
+    
+    # Pick the top max_clauses
+    selected = scored_clauses[:max_clauses]
+    
+    # Sort them back into original document order
+    selected.sort(key=lambda x: x[1])
+    
+    return [item[2] for item in selected]
+
 async def analyze_clauses(clauses: List[str], contract_type: str, full_text: str) -> Dict[str, Any]:
     analyzed_clauses = []
     batch_size = 4
     delay_between_batches = 15
 
-    limited_clauses = clauses[:20]
+    limited_clauses = select_top_clauses(clauses, 20)
+
     for i in range(0, len(limited_clauses), batch_size):
         batch = limited_clauses[i:i + batch_size]
         tasks = [analyze_single_clause(c, contract_type) for c in batch]

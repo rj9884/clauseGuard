@@ -1,0 +1,95 @@
+[
+  {
+    "document": "ACCELERATEDTECHNOLOGIESHOLDINGCORP_04_24_2003-EX-10.13-JOINT VENTURE AGREEMENT",
+    "timestamp": "2026-07-10T05:46:10",
+    "metrics_full_exact": {
+      "Cap On Liability": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Termination For Convenience": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Ip Ownership Assignment": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Non-Compete": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "metrics_full_overlap": {
+      "Cap On Liability": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Termination For Convenience": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Ip Ownership Assignment": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Non-Compete": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "metrics_scope_exact": {
+      "Cap On Liability": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Termination For Convenience": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Ip Ownership Assignment": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Non-Compete": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "metrics_scope_overlap": {
+      "Cap On Liability": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Termination For Convenience": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Ip Ownership Assignment": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "Non-Compete": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "calls_count": 20
+  }
+]

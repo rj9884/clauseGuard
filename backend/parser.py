@@ -29,7 +29,9 @@ def segment_into_clauses(text: str) -> list[str]:
     # Look for a period, exclamation, or question mark, followed by a space,
     # ensuring it's not preceded by common abbreviations.
     sentence_end = re.compile(
-        r'(?<!\b(?:Inc|Co|Corp|Ltd|e\.g|i\.e|vs|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|No|Sec|Art|para))\.'
+        r'(?<!\b(?:Co|vs|No))'
+        r'(?<!\b(?:Inc|Ltd|e\.g|i\.e|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sec|Art))'
+        r'(?<!\b(?:Corp|para))\.'
         r'(?=\s+[A-Z0-9]|\s*$)'
     )
     
